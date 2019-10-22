@@ -82,7 +82,7 @@ func GenerateAccessJWT(clientId string, userId string, authCode string, grantTyp
 		UserId: useroauth.UserId,
 		Scope: useroauth.Scope,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
+			ExpiresAt: time.Now().Add(10 * time.Minute).Unix(),
 		},
 	}
 	refClaims := &structs.AccessClaims{
@@ -90,7 +90,7 @@ func GenerateAccessJWT(clientId string, userId string, authCode string, grantTyp
 		UserId: useroauth.UserId,
 		Scope: "refresh",
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(10 * time.Minute).Unix(),
+			ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
 		},
 	}
 	jwtRes := &structs.JWTResourceResponse{
