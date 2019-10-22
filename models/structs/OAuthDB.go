@@ -12,9 +12,10 @@ type ClientOAuth struct {
 }
 
 type UserOAuth struct {
-	UserId		string	`json:"userId"`
-	ClientId	string	`json:"clientId"`
-	Scope		string	`json:"scope"`
-	AuthCode	string	`json:"authCode"`
-	Timestamp	string	`json:"timestamp"`
+	UserId			string	`json:"userId"`
+	ClientId		string	`json:"clientId"`
+	Scope			string	`json:"scope"`
+	AuthCode		string	`json:"authCode"`
+	Timestamp		string	`json:"timestamp"`
+	RefreshToken	string `json:"refreshToken"`
 }

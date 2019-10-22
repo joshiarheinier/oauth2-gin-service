@@ -27,6 +27,16 @@ func GenerateClientSecret(appName string) (*structs.RegisteredResponse, error) {
 	return regisRes, nil
 }
 
+func VerifyClient(clientId string, clientSecret string) (bool, error) {
+	engine := config.NewDBEngine()
+	if has, err := db.IsClientCredentialDBExist(engine, clientId, clientSecret); !has {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func GenerateWebAuthJWT(clientId string, deviceId string, grantType string) (*structs.JWTWebResponse, error) {
 	engine := config.NewDBEngine()
 	if has, err := db.IsClientCredentialDBExist(engine, clientId); !has {
@@ -58,24 +68,26 @@ func GenerateWebAuthJWT(clientId string, deviceId string, grantType string) (*st
 	return jwtRes, nil
 }
 
-func GenerateAccessJWT(clientId string, clientSecret string, userId string, scope string, grantType string) (*structs.JWTResourceResponse, error) {
+func GenerateAccessJWT(clientId string, userId string, authCode string, grantType string) (*structs.JWTResourceResponse, error) {
 	engine := config.NewDBEngine()
-	if has, err := db.IsClientCredentialDBExist(engine, clientId, clientSecret); !has {
-		return nil, errors.New("Client is not authorized")
-	} else if err != nil {
-		return nil, err
+	var codeCol string
+	if grantType == "authorization_code" {
+		codeCol = "auth_code"
+	} else if grantType == "refresh_token" {
+		codeCol = "refresh_token"
 	}
+	useroauth, err := db.GetUserOAuthDBByCode(engine, clientId, userId, authCode, codeCol)
 	claims := &structs.AccessClaims{
-		ClientId: clientId,
-		UserId: userId,
-		Scope: scope,
+		ClientId: useroauth.ClientId,
+		UserId: useroauth.UserId,
+		Scope: useroauth.Scope,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
 		},
 	}
 	refClaims := &structs.AccessClaims{
-		ClientId: clientId,
-		UserId: userId,
+		ClientId: useroauth.ClientId,
+		UserId: useroauth.UserId,
 		Scope: "refresh",
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(10 * time.Minute).Unix(),
@@ -96,7 +108,7 @@ func GenerateAccessJWT(clientId string, clientSecret string, userId string, scop
 	}
 	jwtRes.Token = jwt
 	jwtRes.RefreshToken = refjwt
-	 if err := updateUserAuthorizationDB(engine, clientId, userId, scope, "expired", timestamp); err != nil {
+	 if err := updateUserAuthorizationDB(engine, useroauth.ClientId, useroauth.UserId, useroauth.Scope, "expired", timestamp, refjwt); err != nil {
 	 	return nil, err
 	 }
 	return jwtRes, nil
@@ -123,7 +135,7 @@ func VerifyAuthJWT(clientId string, deviceId string, authToken string) (bool, er
 func GenerateAuthCode(clientId string, userId string, scope string) (*structs.AuthorizedResponse, error) {
 	engine := config.NewDBEngine()
 	authCode := generateRandomString()
-	err := updateUserAuthorizationDB(engine, clientId, userId, scope, authCode, "")
+	err := updateUserAuthorizationDB(engine, clientId, userId, scope, authCode, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -134,14 +146,32 @@ func GenerateAuthCode(clientId string, userId string, scope string) (*structs.Au
 	return authRes, nil
 }
 
-func VerifyAuthCode(clientId string, userId string, authCode string, scope string) (bool, error) {
+func VerifyAuthCode(clientId string, userId string, authCode string) (bool, error) {
 	engine := config.NewDBEngine()
-	useroauth, err := db.GetUserOAuthDB(engine, clientId, userId, scope)
+	useroauth, err := db.GetUserOAuthDBByCode(engine, clientId, userId, authCode, "auth_code")
 	if err != nil {
 		return false, err
 	} else if useroauth == nil {
-		return false, errors.New("User has not authorized")
-	} else if authCode != useroauth.AuthCode {
+		return false, errors.New("User has either not authorized or been authorized")
+	}
+	return true, nil
+}
+
+func VerifyRefreshToken(clientId string, userId string, refToken string) (bool, error) {
+	engine := config.NewDBEngine()
+	useroauth, err := db.GetUserOAuthDBByCode(engine, clientId, userId, refToken, "refresh_token")
+	if err != nil {
+		return false, err
+	} else if useroauth == nil {
+		return false, errors.New("User does not have refresh token")
+	}
+	claims := &structs.AuthClaims{}
+	token, err := jwt.ParseWithClaims(refToken, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secret_key+useroauth.Timestamp), nil
+	})
+	if err != nil {
+		return false, err
+	} else if !token.Valid {
 		return false, nil
 	}
 	return true, nil

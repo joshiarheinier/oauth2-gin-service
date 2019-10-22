@@ -12,11 +12,11 @@ import (
 )
 
 func updateClientAuthorizationDB(e *xorm.Engine, clientId string, deviceId string, timestamp string) error {
-	clientoauth := db.InitClientOAuthQuery()
 	has, err := db.IsClientOAuthDBExist(e, clientId, deviceId)
 	if err != nil {
 		return err
 	}
+	clientoauth := db.InitClientOAuthQuery()
 	clientoauth.ClientId = clientId
 	clientoauth.DeviceId = deviceId
 	clientoauth.Timestamp = timestamp
@@ -41,24 +41,19 @@ func getClientKeyDB(e *xorm.Engine, clientId string, deviceId string) (string, e
 	return key, nil
 }
 
-func updateUserAuthorizationDB(e *xorm.Engine, clientId string, userId string, scope string, authCode string, timestamp string) error {
-	useroauth := db.InitUserOAuthQuery()
+func updateUserAuthorizationDB(e *xorm.Engine, clientId string, userId string, scope string, authCode string, timestamp string, refToken string) error {
 	has, err := db.IsUserOAuthDBExist(e, clientId, userId, scope)
 	if err != nil {
 		return err
 	}
+	useroauth := db.InitUserOAuthQuery()
 	useroauth.ClientId = clientId
 	useroauth.UserId = userId
 	useroauth.Scope = scope
 	useroauth.AuthCode = authCode
 	useroauth.Timestamp = timestamp
+	useroauth.RefreshToken = refToken
 	if has {
-		old_useroauth, err := db.GetUserOAuthDB(e, clientId, userId, scope)
-		if err != nil {
-			return err
-		} else if old_useroauth.AuthCode == "expired" {
-			return errors.New("Scope for userId:"+userId+" has been authorized")
-		}
 		return db.UpdateUserOAuthDB(e, useroauth, clientId, userId, scope)
 	}
 	return db.InsertUserOAuthDB(e, useroauth)

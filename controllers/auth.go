@@ -54,10 +54,27 @@ func RequestToken(c *gin.Context) {
 	grantType := c.Request.Header.Get("grantType")
 	clientId := c.Request.Header.Get("clientId")
 	userId := c.Request.Header.Get("userId")
-	scope := c.Request.Header.Get("scope")
+	var code string
+	tmp := make(map[string]string)
+	body, err := ioutil.ReadAll(c.Request.Body)
+	json.Unmarshal(body, &tmp)
+	if ok, err := models.VerifyClient(clientId, tmp["encrypted"]); err != nil {
+		c.JSON(500, err.Error())
+	} else if !ok {
+		c.JSON(401, errors.New("Client is not authorized").Error())
+	}
 	if grantType == "authorization_code" {
-		authCode := c.Request.Header.Get("authCode")
-		if ok, err := models.VerifyAuthCode(clientId, userId, authCode, scope); err != nil {
+		code = c.Request.Header.Get("authCode")
+		if ok, err := models.VerifyAuthCode(clientId, userId, code); err != nil {
+			c.JSON(500, err.Error())
+			return
+		} else if !ok {
+			c.JSON(401, errors.New("Token is not verified").Error())
+			return
+		}
+	} else if grantType == "refresh_token" {
+		code = c.Request.Header.Get("refreshToken")
+		if ok, err := models.VerifyRefreshToken(clientId, userId, code); err != nil {
 			c.JSON(500, err.Error())
 			return
 		} else if !ok {
@@ -65,10 +82,7 @@ func RequestToken(c *gin.Context) {
 			return
 		}
 	}
-	tmp := make(map[string]string)
-	body, err := ioutil.ReadAll(c.Request.Body)
-	json.Unmarshal(body, &tmp)
-	res, err := models.GenerateAccessJWT(clientId, tmp["encrypted"], userId, scope, grantType)
+	res, err := models.GenerateAccessJWT(clientId, userId, code, grantType)
 	if err != nil {
 		c.JSON(500, err.Error())
 	} else {

@@ -44,3 +44,14 @@ func GetUserOAuthDB(e *xorm.Engine, clientId string, userId string, scope string
 	}
 	return &useroauth, nil
 }
+
+func GetUserOAuthDBByCode(e *xorm.Engine, clientId string, userId string, code string, codeCol string) (*structs.UserOAuth, error) {
+	var useroauth structs.UserOAuth
+	has, err := e.Table(&structs.UserOAuth{}).Where("client_id = ? AND user_id = ? AND "+codeCol+" = ?", clientId, userId, code).Get(&useroauth)
+	if err != nil {
+		return nil, err
+	} else if !has {
+		return nil, nil
+	}
+	return &useroauth, nil
+}
